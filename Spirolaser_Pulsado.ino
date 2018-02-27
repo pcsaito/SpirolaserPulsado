@@ -20,7 +20,7 @@ int softPWMCounter = 0;
 int prescalerMultiplier = 1;
 int mirrorInputPins[mirrorInputPinCount] = {0, 1, 5, 6};
 int mirrorZeroValue[mirrorInputPinCount] = {100, 100, 100, 100};
-int mirrorMaxValue[mirrorInputPinCount] = {800, 800, 1023, 600};
+int mirrorMaxValue[mirrorInputPinCount] = {900, 1024, 1023, 700};
 
 unsigned long timeStamp() {
   return millis() * 64;
@@ -110,31 +110,37 @@ void setupSpecialModes() {
 
 // RUNTIME
 void loop() {
-  //Apply laser duty
-  applyLaserDuty();   
-  
   //Apply laser prescaler
   applyLaserPrescaler();
+  
+  //Apply laser duty
+  applyLaserDuty();   
   
   softPWMLoop();
 }
 
 void applyLaserDuty() {
   int duty = analogRead(pulseLaserDutyInputPin);
-  int steps = pulseLaserSteps(duty);
-  ICR1 = steps * prescalerMultiplier;  
+  int steps = pulseLaserSteps(duty) * prescalerMultiplier;
+
+  while (TCNT1 > steps) { 
+    TCNT1 = TCNT1 << 1; 
+  }
+  
+  ICR1 = steps;
 
   if (constantDutyMode) {
     int mapDuty = map(duty, 0, analogMax, 0, steps);
-    analogWrite16(10, mapDuty);
+    OCR1B = mapDuty;
   } else {
-    analogWrite16(10, (duty * prescalerMultiplier));
+    OCR1B = (duty * prescalerMultiplier);
   }
 }
 
 
 int pulseLaserSteps(int duty) {
   int steps = analogRead(pulseLaserStepsInputPin);
+  steps = steps < 16 ? 16 : steps;
   
   if (constantDutyMode) {
     return steps;
@@ -145,7 +151,7 @@ int pulseLaserSteps(int duty) {
 
 int applyLaserPrescaler() {
   int prescaler = analogRead(pulseLaserPrescalerInputPin);
-  int mapPrescaler = map(prescaler, 0, analogMax, 0, 12);
+  int mapPrescaler = map(prescaler, 0, analogMax, 0, 15);
   
   switch (mapPrescaler) {
     case 0:
@@ -185,29 +191,31 @@ int applyLaserPrescaler() {
     case 9:
       prescalerMultiplier = 2;
       TCCR1B = (TCCR1B & 0b11111000) | 0x04; 
-      break;
-    case 10:
-      prescalerMultiplier = 1;
-      TCCR1B = (TCCR1B & 0b11111000) | 0x05; 
-      break;  
-    case 11:
-      prescalerMultiplier = 2;
-      TCCR1B = (TCCR1B & 0b11111000) | 0x05; 
-      break;                        
+      break;    
+      case 10:
+      prescalerMultiplier = 4;
+      TCCR1B = (TCCR1B & 0b11111000) | 0x04; 
+      break;    
+      case 11:
+      prescalerMultiplier = 8;
+      TCCR1B = (TCCR1B & 0b11111000) | 0x04; 
+      break;   
+      case 12:
+      prescalerMultiplier = 16;
+      TCCR1B = (TCCR1B & 0b11111000) | 0x04; 
+      break;    
+      case 13:
+      prescalerMultiplier = 32;
+      TCCR1B = (TCCR1B & 0b11111000) | 0x04; 
+      break;   
+      case 14:
+      prescalerMultiplier = 64;
+      TCCR1B = (TCCR1B & 0b11111000) | 0x04; 
+      break;                  
   }
-  
-  applyLaserDuty();
 }
 
 ///HELPERS
-void analogWrite16(uint8_t pin, uint16_t val)
-{
-  switch (pin) {
-    case  9: OCR1A = val; break;
-    case 10: OCR1B = val; break;
-  }
-}
-
 void sleep(unsigned long milis) {
   delay(milis * 64);
 }
@@ -242,10 +250,10 @@ struct SoftPWM splitComponents(int input) {
 void analogWriteLow(int pin, int value) {
   switch (pin) {
     case 0:
-      analogWrite(6, value); 
+      analogWrite(11, value); 
       break;
     case 1:
-      analogWrite(11, value); 
+      analogWrite(6, value); 
       break;
     case 2:
       analogWrite(3, value);       
