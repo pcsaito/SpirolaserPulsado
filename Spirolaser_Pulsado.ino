@@ -22,10 +22,6 @@ int mirrorInputPins[mirrorInputPinCount] = {0, 1, 5, 6};
 int mirrorZeroValue[mirrorInputPinCount] = {100, 100, 100, 100};
 int mirrorMaxValue[mirrorInputPinCount] = {900, 1024, 1023, 700};
 
-unsigned long timeStamp() {
-  return millis() * 64;
-}
-
 /// SETUP
 void setup() {
   Serial.begin(9600);
@@ -220,14 +216,12 @@ void sleep(unsigned long milis) {
   delay(milis * 64);
 }
 
-float counter = 0;
+unsigned long timeStamp() {
+  return millis() * 64;
+}
+
 int smoothedAnalogRead(int pin) { ////// TODO
   int read = analogRead(mirrorInputPins[pin]);
-  if (pin == 99) {
-    read = read - (float)counter;
-    counter = counter + 0.02;
-    Serial.print(counter);
-  }
   return map(read, 0, 1024, mirrorZeroValue[pin], mirrorMaxValue[pin]);
 }
 
@@ -268,26 +262,6 @@ void analogWriteHigh(int pin, int value) {
   analogWriteLow(pin, value+1);
 }
 
-void softPWMLoop2() {
-    int reads[4];
-    for (int pin = 0; pin < mirrorInputPinCount; pin++) {
-      int rawRead = smoothedAnalogRead(mirrorInputPins[pin]);
-        analogWriteLow(pin, rawRead);
-        reads[pin] = rawRead;
-    }
-//      Serial.print("1: ");
-//  Serial.print(reads[0]);
-//  Serial.print(" | 2: ");
-//  Serial.print(reads[1]);
-//  Serial.print(" | 3: ");
-//  Serial.print(reads[2]);
-//  Serial.print(" | 4: ");
-//  Serial.print(reads[3]);
-//  Serial.println("");
-
-     return;
-}
-
 void softPWMLoop() {  
   int shiftSteps = 1 << mirrorSoftPWMShift;
   if (softPWMCounter % shiftSteps == 0) {
@@ -302,23 +276,7 @@ void softPWMLoop() {
     reads[pin] = rawRead;
   }
 
-//  Serial.print("1: ");
-//  Serial.print(mirrorInputs[0].hardOutput);
-//  Serial.print(" - ");
-//  Serial.print(mirrorInputs[0].softOutput);
-//  Serial.print(" | 2: ");
-//  Serial.print(mirrorInputs[1].hardOutput);
-//  Serial.print(" - ");
-//  Serial.print(mirrorInputs[1].softOutput);
-//  Serial.print(" | 3: ");
-//  Serial.print(mirrorInputs[2].hardOutput);
-//  Serial.print(" - ");
-//  Serial.print(mirrorInputs[2].softOutput);
-//  Serial.print(" | 4: ");
-//  Serial.print(mirrorInputs[3].hardOutput);
-//  Serial.print(" - ");
-//  Serial.print(mirrorInputs[3].softOutput);
-//  Serial.println("");
+  //printMirrorInputs(mirrorInputs);
 
   for (int pin = 0; pin < mirrorInputPinCount; pin++) {
     int cycle = 0;
@@ -391,5 +349,27 @@ void setSoftPWMCycle(SoftPWM mirrorInputs[4], int pin, int cycle) {
     } else { 
       analogWriteLow(pin, mirrorInputs[pin].hardOutput); 
     }
+}
+
+
+///DEBUG
+void printMirrorInputs(struct SoftPWM mirrorInputs[4]) {
+  Serial.print("1: ");
+  Serial.print(mirrorInputs[0].hardOutput);
+  Serial.print(" - ");
+  Serial.print(mirrorInputs[0].softOutput);
+  Serial.print(" | 2: ");
+  Serial.print(mirrorInputs[1].hardOutput);
+  Serial.print(" - ");
+  Serial.print(mirrorInputs[1].softOutput);
+  Serial.print(" | 3: ");
+  Serial.print(mirrorInputs[2].hardOutput);
+  Serial.print(" - ");
+  Serial.print(mirrorInputs[2].softOutput);
+  Serial.print(" | 4: ");
+  Serial.print(mirrorInputs[3].hardOutput);
+  Serial.print(" - ");
+  Serial.print(mirrorInputs[3].softOutput);
+  Serial.println("");
 }
 
