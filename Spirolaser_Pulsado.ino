@@ -143,7 +143,7 @@ void loop() {
   checkOSCMode();
   if (oscMode) {
     readSerialInputs();
-    printOscInputs();
+    //printOscInputs();
   }
 
   //printAnalogInputs();
@@ -276,7 +276,7 @@ int applyLaserPrescaler() {
 
 ///HELPERS
 void checkOSCMode() {
-  oscMode = false;//(digitalRead(oscEnablePin) == 1);
+  oscMode = (digitalRead(oscEnablePin) == 1);
 }
 
 void sleep(unsigned long milis) {
@@ -428,12 +428,9 @@ void softPWMLoop() {
       setSoftPWMCycle(mirrorInputs, pin, 7);
       break;
     }
-                  
- 
   }
 
   softPWMCounter++;
-  sleep(5);
 }
 
 void setSoftPWMCycle(SoftPWM mirrorInputs[4], int pin, int cycle) {
