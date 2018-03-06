@@ -1,5 +1,12 @@
 #include <ResponsiveAnalogRead.h>
 
+#include <SLIPEncodedSerial.h>
+SLIPEncodedSerial SLIPSerial(Serial);
+
+#include <OSCMessage.h>
+#include <OSCBundle.h>
+#include <OSCData.h>
+
 ///DEFINES
 #define pulseLaserDutyInputPin 2
 #define pulseLaserStepsInputPin 4
@@ -17,28 +24,30 @@ bool constantDutyMode = true;
 bool automaticMode = true;
 bool oscMode = false;
 
-int softPWMCounter = 0;
-int prescalerMultiplier = 1;
-int lastMapPrescaler = 1;
+uint16_t softPWMCounter = 0;
+uint16_t prescalerMultiplier = 1;
 
 int mirrorInputPins[mirrorInputPinCount] = {0, 1, 5, 6};
-int mirrorZeroValue[mirrorInputPinCount] = {200, 150, 200, 200};
-int mirrorMaxValue[mirrorInputPinCount] = {900, 1024, 1023, 700};
+uint16_t mirrorZeroValue[mirrorInputPinCount] = {200, 150, 200, 200};
+uint16_t mirrorMaxValue[mirrorInputPinCount] = {900, 1024, 1023, 700};
 
-int mirrorOscValues[mirrorInputPinCount] = {0, 0, 0, 0};
-int laserOscValues[3] = {0, 0, 0};
+uint16_t mirrorOscValues[mirrorInputPinCount] = {0, 0, 0, 0};
+uint16_t laserOscValues[3] = {0, 0, 0};
 
-ResponsiveAnalogRead _m1(0, true, 0.001);
-ResponsiveAnalogRead _m2(0, true, 0.001);
-ResponsiveAnalogRead _m3(0, true, 0.001);
-ResponsiveAnalogRead _m4(0, true, 0.001);
-ResponsiveAnalogRead _dt(0, true, 0.001);
-ResponsiveAnalogRead _ps(0, true, 0.001);
-ResponsiveAnalogRead _st(0, true, 0.001);
+#define analogSmooth 0.5
+
+ResponsiveAnalogRead _m1(0, true, analogSmooth);
+ResponsiveAnalogRead _m2(0, true, analogSmooth);
+ResponsiveAnalogRead _m3(0, true, analogSmooth);
+ResponsiveAnalogRead _m4(0, true, analogSmooth);
+ResponsiveAnalogRead _dt(0, true, analogSmooth);
+ResponsiveAnalogRead _ps(0, true, 0.1);
+ResponsiveAnalogRead _st(0, true, analogSmooth);
 
 /// SETUP
 void setup() {
-  Serial.begin(9600);
+//  Serial.begin(9600);
+SLIPSerial.begin(9600);
 
   Serial.println("Spirolaser booting...");
 
@@ -84,7 +93,7 @@ void setupMirrorsPWM() {
 }
 
 void setupRandom() {
-  int seed = analogRead(0);
+  uint16_t seed = analogRead(0);
   seed += analogRead(1);
   seed += analogRead(2);
   seed += analogRead(3);
@@ -96,14 +105,14 @@ void setupRandom() {
 }
 
 void setupSpecialModes() {
-  int loLevel = 24;
-  int hiLevel = analogMax - loLevel;
+  uint16_t loLevel = 24;
+  uint16_t hiLevel = analogMax - loLevel;
 
   /// Manual Mode
-  int m1 = analogRead(0);
-  int m2 = analogRead(1);
-  int m3 = analogRead(5);
-  int m4 = analogRead(6);
+  uint16_t m1 = analogRead(0);
+  uint16_t m2 = analogRead(1);
+  uint16_t m3 = analogRead(5);
+  uint16_t m4 = analogRead(6);
   if ((m1 >= hiLevel) && (m3 >= hiLevel)) {
     if ((m2 <= loLevel) && (m4 <= loLevel)) {
       automaticMode = false;
@@ -111,9 +120,9 @@ void setupSpecialModes() {
   }
 
   ///Static Mode
-  int l1 = analogRead(2);
-  int l2 = analogRead(3);
-  int l3 = analogRead(4);
+  uint16_t l1 = analogRead(2);
+  uint16_t l2 = analogRead(3);
+  uint16_t l3 = analogRead(4);
   if ((l1 >= hiLevel) && (l3 >= hiLevel)) {
     if (l2 <= loLevel) {
       constantDutyMode = false;
@@ -136,17 +145,19 @@ void loop() {
     readSerialInputs();
     printOscInputs();
   }
+
+  //printAnalogInputs();
 }
 
 void applyLaserDuty() {
-  int duty;
+  uint16_t duty;
   if (oscMode) { 
     duty = laserOscValues[0];
   } else {
-    duty = analogRead(pulseLaserDutyInputPin);
+    duty = 256;//analogRead(pulseLaserDutyInputPin);
   }
 
-  int steps = pulseLaserSteps(duty) * prescalerMultiplier;
+  uint16_t steps = pulseLaserSteps(duty) * prescalerMultiplier;
 
   if (!oscMode) {
     while (TCNT1 > steps) { 
@@ -158,7 +169,7 @@ void applyLaserDuty() {
   ICR1 = _st.getValue();
 
   if (constantDutyMode) {
-    int mapDuty = map(duty, 0, analogMax, 0, steps);
+    uint16_t mapDuty = map(duty, 0, analogMax, 0, steps);
     _dt.update(mapDuty);
     
     OCR1B = _dt.getValue();
@@ -170,12 +181,12 @@ void applyLaserDuty() {
 }
 
 
-int pulseLaserSteps(int duty) {
-  int steps;
+uint16_t pulseLaserSteps(uint16_t duty) {
+  uint16_t steps;
   if (oscMode) { 
     steps = laserOscValues[2];
   } else {
-    steps = analogRead(pulseLaserStepsInputPin);
+    steps = analogRead(pulseLaserDutyInputPin);//pulseLaserStepsInputPin);
   }
   steps = steps < 16 ? 16 : steps;
   
@@ -195,17 +206,8 @@ int applyLaserPrescaler() {
   }
 
   _ps.update(prescaler);
-  
-  int delta = _ps.getValue() - lastMapPrescaler;
-  if (delta > 0) {
-    TCNT1 >> delta;
-    lastMapPrescaler = _ps.getValue();
-  } else if (delta < 0){
-    TCNT1 << (-delta);
-    lastMapPrescaler = _ps.getValue();
-  }
  
-  switch ((int)_ps.getValue()) {
+  switch (prescaler) {
     case 0:
       prescalerMultiplier = 1;
       TCCR1B = (TCCR1B & 0b11111000) | 0x01; 
@@ -213,9 +215,11 @@ int applyLaserPrescaler() {
     case 1:
       prescalerMultiplier = 2;
       TCCR1B = (TCCR1B & 0b11111000) | 0x01; 
+      break;
     case 2:
       prescalerMultiplier = 4;
       TCCR1B = (TCCR1B & 0b11111000) | 0x01; 
+      break;
     case 3:
       prescalerMultiplier = 1;
       TCCR1B = (TCCR1B & 0b11111000) | 0x02; 
@@ -265,72 +269,14 @@ int applyLaserPrescaler() {
       TCCR1B = (TCCR1B & 0b11111000) | 0x04; 
       break;                  
   }
-}
-
-int counter = 0;
-void readSerialInputs() {  
-  String dateResponse = "";
-
-  #define INPUT_SIZE 36
-  char input[INPUT_SIZE + 1];
-  char trash[INPUT_SIZE + 1];
-  if (Serial.available() > 37) {
-    //mirror
-    Serial.readBytesUntil('(', trash, INPUT_SIZE);
-    
-    byte size = Serial.readBytesUntil(')', input, INPUT_SIZE);
-    if (size < 20) { return; }
-    input[size] = 0;
-
-    // Split the command in two values
-    char* value = strtok(input, ":");
-    int index = 0;
-    while (value != NULL)
-    {
-      if (strlen(value) != 4) { 
-        return;
-      }
-        
-        int intValue = atoi(value);
-
-        if (index < 4) {
-          mirrorOscValues[index] = intValue;
-        } 
-      
-     index++;
-     value = strtok(NULL, ":");
-    }
-
-    //laser
-    Serial.readBytesUntil('[', trash, INPUT_SIZE);
-    
-    size = Serial.readBytesUntil(']', input, INPUT_SIZE);
-    if (size < 15) { return; }
-    input[size] = 0;
-
-    // Split the command in two values
-    value = strtok(input, ":");
-    index = 0;
-    while (value != NULL)
-    {
-      if (strlen(value) != 4) { 
-        return;
-      }
-        
-      int intValue = atoi(value);
-      if (index < 3) {
-        laserOscValues[index] = intValue;
-      } 
-      
-      index++;
-      value = strtok(NULL, ":");
-    }
-  }
+  Serial.print(prescaler);
+  Serial.print(" - ");
+  Serial.println(prescalerMultiplier);
 }
 
 ///HELPERS
 void checkOSCMode() {
-  oscMode = (digitalRead(oscEnablePin) == 1);
+  oscMode = false;//(digitalRead(oscEnablePin) == 1);
 }
 
 void sleep(unsigned long milis) {
@@ -341,12 +287,8 @@ unsigned long timeStamp() {
   return millis() * 64;
 }
 
-int smoothedAnalogRead(int pin) {
-  
-}
-
-int mirrorRead(int pin) { ////// TODO
-  int read;
+uint16_t mirrorRead(int pin) { ////// TODO
+  uint16_t read;
   if (oscMode) {
     read = mirrorOscValues[pin];
   } else {
@@ -362,7 +304,7 @@ struct SoftPWM {
  int softOutput;
 };
 
-struct SoftPWM splitComponents(int input) {
+struct SoftPWM splitComponents(uint16_t input) {
   int shift = mirrorSoftPWMShift;
 
   int hardOutput = (input >> shift) ;
@@ -399,15 +341,15 @@ void softPWMLoop() {
     softPWMCounter = 0;
   }
 
-  int reads[4];
+  uint16_t reads[4];
   struct SoftPWM mirrorInputs[4];
   for (int pin = 0; pin < mirrorInputPinCount; pin++) {
-    int rawRead = mirrorRead(pin);
+    uint16_t rawRead = mirrorRead(pin);
     mirrorInputs[pin] = splitComponents(rawRead);
     reads[pin] = rawRead;
   }
 
-  int rawRead = mirrorRead(0);
+  uint16_t rawRead = mirrorRead(0);
   _m1.update(rawRead);
   mirrorInputs[0] = splitComponents(_m1.getValue());
   reads[0] = _m1.getValue();
@@ -524,7 +466,7 @@ void printMirrorInputs(struct SoftPWM mirrorInputs[4]) {
   Serial.println("");
 }
 
-void printOscInputs() {
+void printAnalogInputs() {
   Serial.print("1: ");
   Serial.print(_m1.getValue());
   Serial.print(" | 2: ");
@@ -542,3 +484,55 @@ void printOscInputs() {
   Serial.println("");
 }
 
+void printOscInputs() {
+  Serial.print("1: ");
+  Serial.print(mirrorOscValues[0]);
+  Serial.print(" | 2: ");
+  Serial.print(mirrorOscValues[1]);
+  Serial.print(" | 3: ");
+  Serial.print(mirrorOscValues[2]);
+  Serial.print(" | 4: ");
+  Serial.print(mirrorOscValues[3]);
+  Serial.print(" | dt: ");
+  Serial.print(laserOscValues[0]);
+  Serial.print(" | ps: ");
+  Serial.print(laserOscValues[1]);
+  Serial.print(" | st: ");
+  Serial.print(laserOscValues[2]);
+  Serial.println("");
+}
+
+//OSC
+void readSerialInputs() {
+  OSCMessage msg;
+  while(!SLIPSerial.endofPacket()){
+    int size = SLIPSerial.available();
+    if (size > 0){
+      //fill the msg with all of the available bytes
+      while(size--){
+        msg.fill(SLIPSerial.read());
+      }
+    }
+  }
+  
+ if (!msg.hasError()) {
+    msg.dispatch("/m", m);      
+    msg.dispatch("/l", l);
+  } else {
+    OSCErrorCode error = msg.getError();
+    Serial.print("error: ");
+    Serial.println(error);
+  }
+}
+
+void m(OSCMessage &msg) { 
+  mirrorOscValues[0] = (uint16_t)msg.getInt(0);
+  mirrorOscValues[1] = (uint16_t)msg.getInt(1);
+  mirrorOscValues[2] = (uint16_t)msg.getInt(2);
+  mirrorOscValues[3] = (uint16_t)msg.getInt(3);
+}
+void l(OSCMessage &msg) { 
+  laserOscValues[0] = (uint16_t)msg.getInt(0);
+  laserOscValues[1] = (uint16_t)msg.getInt(1);
+  laserOscValues[2] = (uint16_t)msg.getInt(2);
+}
