@@ -188,13 +188,13 @@ void sendOsc() {
 
 void printParam() {
   char mirrors[20];
-  sprintf(mirrors, "%04d:%04d:%04d:%04d:", _m1, _m2, _m3, _m4);
+  sprintf(mirrors, "%04d:%04d:%04d:%04d", _m1, _m2, _m3, _m4);
   Serial.print("(");
   Serial.print(mirrors);
-  Serial.print(")");
+  Serial.print(") - ");
 
   char laser[15];
-  sprintf(laser, "%04d:%04d:%04d:", _dt, _ps, _st);
+  sprintf(laser, "%04d:%04d:%04d", _dt, _ps, _st);
   Serial.print("[");
   Serial.print(laser);
   Serial.print("]");
