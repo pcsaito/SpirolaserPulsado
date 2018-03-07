@@ -34,7 +34,7 @@ uint16_t mirrorMaxValue[mirrorInputPinCount] = {900, 1024, 1023, 700};
 uint16_t mirrorOscValues[mirrorInputPinCount] = {0, 0, 0, 0};
 uint16_t laserOscValues[3] = {0, 0, 0};
 
-#define analogSmooth 0.5
+#define analogSmooth 0.01
 
 ResponsiveAnalogRead _m1(0, true, analogSmooth);
 ResponsiveAnalogRead _m2(0, true, analogSmooth);
@@ -154,7 +154,7 @@ void applyLaserDuty() {
   if (oscMode) { 
     duty = laserOscValues[0];
   } else {
-    duty = 256;//analogRead(pulseLaserDutyInputPin);
+    duty = analogRead(pulseLaserDutyInputPin);
   }
 
   uint16_t steps = pulseLaserSteps(duty) * prescalerMultiplier;
@@ -186,7 +186,7 @@ uint16_t pulseLaserSteps(uint16_t duty) {
   if (oscMode) { 
     steps = laserOscValues[2];
   } else {
-    steps = analogRead(pulseLaserDutyInputPin);//pulseLaserStepsInputPin);
+    steps = analogRead(pulseLaserStepsInputPin);
   }
   steps = steps < 16 ? 16 : steps;
   
