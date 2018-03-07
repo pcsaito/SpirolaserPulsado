@@ -24,6 +24,7 @@ char pass[] = "qualquerbosta";
 
 // A UDP instance to let us send and receive packets over UDP
 WiFiUDP Udp;
+IPAddress outIp(192, 168, 1, 100);
 const unsigned int outPort = 9000;          // remote port (not needed for receive)
 const unsigned int localPort = 8000;        // local port to listen for UDP packets (here's where we send the packets)
 
@@ -41,6 +42,8 @@ uint16_t _st = 0;
 uint16_t rawSt = 0;
 uint16_t mPushDelta = 10;
 int16_t microSt = 0;
+
+int8_t enableCounter = 0;
 
 #define ENABLEPIN D3
 #define LEDPIN D0
@@ -89,6 +92,14 @@ void loop() {
     currentClients = clients;
     Serial.println("Clients Connected: " + String((int)currentClients));
   }
+  
+  if (currentClients == 0) {
+    enableCounter--;
+    if (enableCounter <= 0) {
+      digitalWrite(ENABLEPIN, LOW);
+      enableCounter = 0;
+    }    
+  }
 
   OSCMessage msg;
   uint8_t size = Udp.parsePacket();
@@ -102,6 +113,8 @@ void loop() {
     
     if (!msg.hasError()) {
       msg.dispatch("/spirolaser/enable", enable);
+      msg.dispatch("/spirolaser/delta", delta);
+      
       msg.dispatch("/spirolaser/m1", m1);
       msg.dispatch("/spirolaser/m1up", m1up);
       msg.dispatch("/spirolaser/m1down", m1down);
@@ -190,12 +203,26 @@ void printParam() {
 }
 
 //functions
+void returnMessage(const char *_address, float value) {
+  OSCMessage returnMsg(_address);
+  returnMsg.add(value);
+
+  Udp.beginPacket(outIp, outPort);
+  returnMsg.send(Udp); 
+  Udp.endPacket();
+}
+
 void enable(OSCMessage &msg) { 
   if (msg.getFloat(0) > 0) {
+    enableCounter = 50;
     digitalWrite(ENABLEPIN, HIGH);
   } else {
     digitalWrite(ENABLEPIN, LOW); 
   }
+}
+
+void delta(OSCMessage &msg) { 
+  mPushDelta = (int)msg.getFloat(0);
 }
 
 void m1(OSCMessage &msg) { 
@@ -205,11 +232,13 @@ void m1up(OSCMessage &msg) {
   if (_m1+mPushDelta < 1024) {
     _m1 += mPushDelta;
   }
+  returnMessage("/spirolaser/m1", (float)_m1);
 }
 void m1down(OSCMessage &msg) { 
   if (_m1-mPushDelta >= 0) {
     _m1 -= mPushDelta;
   }
+  returnMessage("/spirolaser/m1", (float)_m1);
 }
 
 void m2(OSCMessage &msg) { 
@@ -219,11 +248,13 @@ void m2up(OSCMessage &msg) {
   if (_m2+mPushDelta < 1024) {
     _m2 += mPushDelta;
   }
+  returnMessage("/spirolaser/m2", (float)_m2);
 }
 void m2down(OSCMessage &msg) { 
   if (_m2-mPushDelta >= 0) {
     _m2 -= mPushDelta;
   }
+  returnMessage("/spirolaser/m2", (float)_m2);
 }
 
 void m3(OSCMessage &msg) { 
@@ -233,11 +264,13 @@ void m3up(OSCMessage &msg) {
   if (_m3+mPushDelta < 1024) {
     _m3 += mPushDelta;
   }
+  returnMessage("/spirolaser/m3", (float)_m3);
 }
 void m3down(OSCMessage &msg) { 
   if (_m3-mPushDelta >= 0) {
     _m3 -= mPushDelta;
   }
+  returnMessage("/spirolaser/m3", (float)_m3);
 }
 
 void m4(OSCMessage &msg) { 
@@ -247,11 +280,13 @@ void m4up(OSCMessage &msg) {
   if (_m4+mPushDelta < 1024) {
     _m4 += mPushDelta;
   }
+  returnMessage("/spirolaser/m4", (float)_m4);
 }
 void m4down(OSCMessage &msg) { 
   if (_m4-mPushDelta >= 0) {
     _m4 -= mPushDelta;
   }
+  returnMessage("/spirolaser/m4", (float)_m4);
 }
 
 void duty(OSCMessage &msg) { 
@@ -266,18 +301,14 @@ void psup(OSCMessage &msg) {
     _ps++;
   }
 
-  OSCMessage returnMsg("/spirolaser/ps");
-  returnMsg.add((float)_ps);
-  returnMsg.send(Udp);
+  returnMessage("/spirolaser/ps", (float)_ps);
 }
 void psdown(OSCMessage &msg) { 
   if (_ps > 0) {
     _ps--;
   }
   
-  OSCMessage returnMsg("/spirolaser/ps");
-  returnMsg.add((float)_ps);
-  returnMsg.send(Udp);
+  returnMessage("/spirolaser/ps", (float)_ps);
 }
 
 void steps(OSCMessage &msg) { 
@@ -287,16 +318,20 @@ void steps(OSCMessage &msg) {
   _st = newSt >= 0 ? newSt : 0;
 }
 void stepsup(OSCMessage &msg) { 
-  rawSt += 50;
+  rawSt += mPushDelta;
   
   int newSt = rawSt + microSt;
   _st = newSt >= 0 ? newSt : 0;
+  
+  returnMessage("/spirolaser/steps", (float)_st);
 }
 void stepsdown(OSCMessage &msg) { 
-  rawSt -= 50;
+  rawSt -= mPushDelta;
   
   int newSt = rawSt + microSt;
   _st = newSt >= 0 ? newSt : 0;
+  
+  returnMessage("/spirolaser/steps", (float)_st);
 }
 
 void msteps(OSCMessage &msg) { 
@@ -310,10 +345,14 @@ void mstepsup(OSCMessage &msg) {
 
   int newSt = rawSt + microSt;
   _st = newSt >= 0 ? newSt : 0;
+  
+  returnMessage("/spirolaser/msteps", (float)microSt);
 }
 void mstepsdown(OSCMessage &msg) { 
   microSt--;
 
   int newSt = rawSt + microSt;
   _st = newSt >= 0 ? newSt : 0;
+
+  returnMessage("/spirolaser/msteps", (float)microSt);
 }
