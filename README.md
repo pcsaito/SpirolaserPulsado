@@ -7,3 +7,7 @@ Arduino nano controlling:
 * 7 analog inputs. 4 to the motors and 3 to laser modulation.
 
 Laser driven by a Simpledrive 2.5A rev1
+
+Videos showing some of the possible patterns:
+https://youtu.be/ij14z9-Ge2A
+https://youtu.be/btfQ507pF-w
